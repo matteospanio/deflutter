@@ -1,0 +1,109 @@
+# Tests on every push / pull request. On a version tag (v*) it also builds standalone binaries for
+# Linux, Windows and macOS with PyInstaller, smoke-tests each one, and publishes them as a GitHub
+# release whose asset names never change, so README links to releases/latest/download/... keep working.
+# Run it manually (Actions -> CI -> Run workflow) to build the binaries without releasing them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run pytest -q
+
+  build:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04  # oldest supported glibc -> runs on most current distributions
+            asset: deflutter-linux-x86_64.tar.gz
+          - os: windows-latest
+            asset: deflutter-windows-x64.exe
+          - os: macos-latest
+            asset: deflutter-macos-arm64.zip
+          - os: macos-15-intel
+            asset: deflutter-macos-x86_64.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --no-dev
+
+      - name: Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
+            libfontconfig1 libdbus-1-3 libpulse0
+
+      - name: Build with PyInstaller
+        run: |
+          # one self-contained file on Linux/Windows; an .app bundle on macOS
+          MODE=--onefile
+          if [ "$RUNNER_OS" = macOS ]; then MODE=--onedir; fi
+          uv run --no-dev --with pyinstaller pyinstaller --noconfirm --clean --windowed $MODE \
+            --name deflutter --paths . --collect-data pyqtgraph deflutter/__main__.py
+
+      - name: Smoke test (the binary starts and builds its main window)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          case "$RUNNER_OS" in
+            Linux) dist/deflutter --smoke-test ;;
+            Windows) dist/deflutter.exe --smoke-test ;;
+            macOS) dist/deflutter.app/Contents/MacOS/deflutter --smoke-test ;;
+          esac
+
+      - name: Package
+        run: |
+          mkdir -p out
+          case "$RUNNER_OS" in
+            Linux) tar -czf "out/${{ matrix.asset }}" -C dist deflutter ;;
+            Windows) cp dist/deflutter.exe "out/${{ matrix.asset }}" ;;
+            macOS) ditto -c -k --keepParent dist/deflutter.app "out/${{ matrix.asset }}" ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish the release (re-runs replace the assets)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "deflutter $GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --clobber

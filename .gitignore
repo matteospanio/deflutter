@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+demo/
+*.wav
+*.flac
+# private design documents
+*.docx
+/docs.md
