@@ -3,6 +3,8 @@ name = "deflutter"
 version = "0.1.0"
 description = "Reference-tone based correction of frequency drift (wow/flutter-like anomalies) in audio recordings"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",

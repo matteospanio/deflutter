@@ -1,6 +1,7 @@
 # deflutter
 
 [![CI](https://github.com/matteospanio/deflutter/actions/workflows/ci.yml/badge.svg)](https://github.com/matteospanio/deflutter/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 **deflutter** is a desktop app that corrects frequency drift (wow, flutter, tape-speed anomalies) in
 audio recordings.
@@ -366,3 +367,12 @@ workflow artifacts.
   - the two reference tones are found as *moving*, and the four machine tones as *fixed*;
   - all 4 anomalies are coherent across both references;
   - the residual deviation drops from 63.4 to 0.6 cents RMS (−41 dB).
+
+## License
+
+Copyright © 2026 Matteo Spanio.
+
+deflutter is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License as published by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version. It is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; see [LICENSE](LICENSE) for the full text.
